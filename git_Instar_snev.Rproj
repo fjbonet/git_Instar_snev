@@ -1,13 +1,83 @@
-Version: 1.0
+##################################################################################################
+####### LOAD LIBRARIES
+install.packages(c("sp", "maps", "maptools", "rgdal", "gpclib", "spatstat"))  # This has to be done only the first time the code is run in your computer
 
-RestoreWorkspace: Default
-SaveWorkspace: Default
-AlwaysSaveHistory: Default
+library(sp)
+library(maps)
+library(maptools)
+library(rgdal)
+library(gpclib)
+library(spatstat)
+library(ggplot2)
 
-EnableCodeIndexing: Yes
-UseSpacesForTab: Yes
-NumSpacesForTab: 2
-Encoding: UTF-8
+##################################################################################################
+####### SET WORKING DIRECTORY AND IMPORT DATASET CONTAINING LEVELS OF FOREST DAMAGE
 
-RnwWeave: knitr
-LaTeX: XeLaTeX
+setwd("C:/Users/iecolab/Desktop/TFM/fuentes_datos_validacion/COPLAS_PLAGAS/")
+
+#AL <- read.table("infestacion AL.txt", header = T, sep = "\t")
+#CA <- read.table("infestacion CA.txt", header = T, sep = "\t")
+#CO <- read.table("infestacion CO.txt", header = T, sep = "\t")
+GR <- read.table("infestacion_GR.csv", header = T,sep= ";")
+#HU <- read.table("infestacion HU.txt", header = T, sep = "\t")
+#JA <- read.table("infestacion JA.txt", header = T, sep = "\t")
+#MA <- read.table("infestacion MA.txt", header = T, sep = "\t")
+#SE <- read.table("infestacion SE.txt", header = T, sep = "\t")
+#infes <- rbind(AL, CA, CO, GR, HU, JA, MA, SE)
+GR$fecha <- as.factor(GR$fecha)	# Coerce year as factor
+table(GR$Fecha)
+
+GR$RODAL <- gsub("-", "", GR$RODAL)		# Perform replacement of matches determined by regular expression matching
+GR$RODAL <- as.factor(substr(GR$RODAL, 1, 8))
+
+# Extract th information from Cortijuela
+corti <- GR[GR$RODAL %in% c('GR000030','GR134018','GR134020','GR134021'),]
+write.csv(corti, "corti.csv")
+
+# Agregate COPLAS data
+avg_infest_COPLAS <- aggregate(x = corti[c('GRADO.REVISADO')], by=list(fecha=corti$fecha), FUN=mean, na.rm=TRUE)
+
+# Import results from INSTAR
+setwd("C:/Users/iecolab/Desktop/TFM/fuentes_datos_validacion/COPLAS_PLAGAS/")
+result_huevos <-read.table("huevos_sn.csv", header=T, sep=";", dec=",")
+result_L1 <-read.table("L1_sn.csv", header=T, sep=";", dec=",")
+result_L2 <-read.table("L2_sn.csv", header=T, sep=";", dec=",")
+result_crisalidas <-read.table("crisalidas_sn.csv", header=T, sep=";", dec=",")
+result_vigor <-read.table("vigor_sn.csv", header=T, sep=";", dec=",")
+agre_Instar<-cbind(result_huevos,result_L1,result_L2,result_crisalidas,result_vigor)
+agre_Instar <- agre_Instar[ -c(3, 5, 7, 9) ]
+
+#Crear columna year
+agre_Instar$dia <- as.character(agre_Instar$dia)
+agre_Instar$dia <- as.Date(agre_Instar$dia, format="%d/%m/%Y")
+agre_Instar$year<-as.numeric(format(agre_Instar$dia, "%Y"))
+
+#Agregar datos INSTAR
+suma_result <- aggregate(x = agre_Instar[c('huevos','L1','L2','crisalida')], by=list(year=agre_Instar$year), FUN=sum, na.rm=TRUE)
+avg_result <- aggregate(x = agre_Instar[c('exergia')], by=list(year=agre_Instar$year), FUN=mean, na.rm=TRUE)
+names(avg_result)[2] <- "vigor_media"
+max_result <- aggregate(x = agre_Instar[c('exergia')], by=list(year=agre_Instar$year), FUN=max, na.rm=TRUE)
+names(max_result)[2] <- "vigor_max"
+min_result <- aggregate(x = agre_Instar[c('exergia')], by=list(year=agre_Instar$year), FUN=min, na.rm=TRUE)
+names(min_result)[2] <- "vigor_min"
+
+agre_result<-cbind(suma_result,avg_result,max_result,min_result)
+agre_result <- agre_result[ -c(6, 8, 10) ]
+
+
+# Plot COPLAS vs INSTAR (NO SIRVE ESTE GR??FICO)
+plot(avg_infest_COPLAS)
+lines(spline(avg_infest_COPLAS))
+
+n_30<-subset(corti, N.rodal=="GR000030", select = c(N.rodal, Fecha, Grado))
+n_18<-subset(corti, N.rodal=="GR134018", select = c(N.rodal, Fecha, Grado))
+n_20<-subset(corti, N.rodal=="GR134020", select = c(N.rodal, Fecha, Grado))
+n_21<-subset(corti, N.rodal=="GR134021", select = c(N.rodal, Fecha, Grado))
+
+par(mar=c(5,4,4,5)+.1)
+plot(result$date, result$vigor_pino, type="l", xlab="Day (from 27/02/2001 to 12/01/2014)", col="red", ylab="Pine vigor")
+par(new=TRUE)
+plot(n_30$Fecha, n_30$Grado, type="point", col="blue", xaxt="n",yaxt="n",xlab="",ylab="", axis(4))
+#plot(n_20$Fecha, n_20$Grado, type="point", col="blue", xaxt="n",yaxt="n",xlab="",ylab="", axis(4))
+mtext("% Infection", side=4, line=3)
+
